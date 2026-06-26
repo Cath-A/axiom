@@ -60,6 +60,10 @@ def _parse_assign(tokens: list[Token], i: int) -> tuple[Assign, int]:
     Returns the Assign node and the index of the next unread token.
     """
     target = tokens[i].value
+
+    if target == 'I':
+        raise SyntaxError("'I' is reserved for identity matrices and cannot be assigned to")
+
     i += 2
     value, i = _parse_addition(tokens, i)
 
@@ -135,6 +139,24 @@ def _handle_function(tokens: list[Token], i: int) -> tuple[Expr, int]:
 
     return FuncCall(name, args), i
 
+def _handle_identity(tokens: list[Token], i: int) -> tuple[Expr, int]:
+    i += 2
+
+    if tokens[i].type == TokenType.NUMBER:
+        n = Scalar(tokens[i].value)
+    elif tokens[i].type == TokenType.NAME:
+        n = Name(tokens[i].value)
+    elif tokens[i].type == TokenType.LBRACE:
+        i += 1
+        n, i = _parse_addition(tokens, i)
+
+        if tokens[i].type != TokenType.RBRACE:
+            raise SyntaxError("Expected '}' to close braced expression")
+    else:
+        raise SyntaxError("Expected size after 'I_")
+
+    return IdentityLiteral(n), i
+    
 
 def _handle_matrix(tokens: list[Token], i: int) -> tuple[Expr, int]:
     """Parse a matrix from source starting at index i.
@@ -178,7 +200,44 @@ def _parse_unary(tokens: list[Token], i: int) -> tuple[Expr, int]:
         operand, i = _parse_unary(tokens, i)
         return UnaryOp('+', operand), i
 
-    return _parse_atom(tokens, i)
+    return _parse_power(tokens, i)
+
+
+def _parse_power(tokens: list[Token], i: int) -> tuple[Expr, int]:
+    """Parse a superscript (^) expression, right-associative.
+
+    Handles:
+        - A^T         → SuperscriptOp(A, None, is_transpose=True)
+        - A^2         → SuperscriptOp(A, Scalar(2))
+        - A^n         → SuperscriptOp(A, Name('n'))
+        - A^{expr}    → SuperscriptOp(A, expr)
+
+    Returns the Expr node and the index of the next unread token.
+    """
+    base, i = _parse_atom(tokens, i)
+
+    if tokens[i].type != TokenType.CARET:
+        return base, i
+
+    i += 1
+
+    if tokens[i].type == TokenType.NUMBER:
+        expr = Scalar(tokens[i].value)
+    elif tokens[i].type == TokenType.NAME and tokens[i].value == 'T':
+        expr = Symbol('T')
+    elif tokens[i].type == TokenType.NAME:
+        expr = Name(tokens[i].value)
+    elif tokens[i].type == TokenType.LBRACE:
+        i += 1
+        expr, i = _parse_addition(tokens, i)
+
+        if tokens[i].type != TokenType.RBRACE:
+            raise SyntaxError("Expected '}' to close braced expression")
+    else:
+        raise SyntaxError("Expected superscript after '^'")
+
+    i += 1
+    return SuperscriptOp(base, expr), i
 
 
 # TODO: rest of the atoms
@@ -193,7 +252,9 @@ def _parse_atom(tokens: list[Token], i: int) -> tuple[Expr, int]:
         expression = Scalar(tokens[i].value)
 
     elif tokens[i].type == TokenType.NAME:
-        if tokens[i + 1].type == TokenType.LPAREN:
+        if tokens[i].value == 'I' and tokens[i + 1].type == TokenType.UNDERSCORE:
+            expression, i = _handle_identity(tokens, i)
+        elif tokens[i + 1].type == TokenType.LPAREN:
             expression, i = _handle_function(tokens, i)
         else:
             expression = Name(tokens[i].value)
