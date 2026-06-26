@@ -130,6 +130,46 @@ class Matrix:
 
         raise MatrixTypeError(f"Cannot multiply {type(other).__name__} and Matrix")
 
+    def transpose(self) -> Matrix:
+        """Return the transpose of this matrix.
+
+        The transpose swaps rows and columns: element [i][j] becomes [j][i].
+        An m×n matrix becomes n×m.
+        """
+        new_rows = []
+
+        for j in range(self.num_cols()):
+            new_rows.append([self.rows[i][j] for i in range(self.num_rows())])
+        
+        return Matrix(new_rows)
+
+    def __pow__(self, power: int | str) -> Matrix:
+        """Return this matrix raised to a power, or transposed.
+
+        If power is 'T', returns the transpose.
+        If power is an integer n:
+            A^0 = I (identity matrix of same size)
+            A^1 = A (return self)
+            A^n = A * A * ... * A  (n times)
+        """
+        if power == 'T':
+            return self.transpose()
+
+        if not isinstance(power, int) or power < 0:
+            raise ValueError("Exponent must be a non-negative integer or 'T'")
+        if self.num_rows() != self.num_cols():
+            raise MatrixShapeError("Matrix must be square for exponentiation")
+
+        if power == 0:
+            from builtin_funcs import identity
+            return identity(self.num_rows())
+        
+        result = self
+        for _ in range(power - 1):
+            result = result * self
+
+        return result
+
     def __getitem__(self, key):
         """Get matrix elements, rows, or columns via indexing.
 

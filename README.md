@@ -43,10 +43,12 @@ Then just type matrix-lang code. Type `exit` or `quit` to leave.
 
 ## TODOs
 **Immediate**
-- change identity(n) to I_n (so also add support for special names)
 - deal with printing large matrices
+- matrix multiplication efficiency
+
 
 **Future**
 - While loops
 - Comparison operators (`==`, `!=`, `<`, `>`)
 - String support, at least for printing labels
+- (consider adding) 'let' to first time assigning variables, and the implications of that for matrix mutability
