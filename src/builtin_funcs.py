@@ -36,5 +36,5 @@ def identity(size: int) -> Matrix:
 BUILTINS = {
     'print': print,
     'diag': diag,
-    'identity': identity
+    'I': identity,
 }

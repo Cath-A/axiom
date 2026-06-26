@@ -2,7 +2,7 @@
 
 from matrix import *
 from typing import Optional, Any
-from builtin_funcs import BUILTINS
+from builtin_funcs import BUILTINS, identity
 
 
 class Statement:
@@ -342,6 +342,88 @@ class FuncCall(Expr):
 
     def __repr__(self) -> str:
         return f'FuncCall({self.name}, {self.args})'
+
+
+class IdentityLiteral(Expr):
+    """An identity matrix literal written as I_n in source.
+
+    Instance Attributes:
+        - size: an expression that evaluates to the integer size of the matrix
+
+    Examples:
+        I_3       → 3×3 identity
+        I_n       → n×n identity (n must hold an integer)
+        I_{n+1}   → (n+1)×(n+1) identity
+    """
+    size: Expr
+
+    def __init__(self, size: Expr) -> None:
+        """Initialise a new IdentityLiteral node."""
+        self.size = size
+
+    def evaluate(self, env: dict[str, Any]) -> Any:
+        """Evaluate to produce an identity matrix."""
+        n = self.size.evaluate(env)
+        
+        if not isinstance(n, int): 
+            raise TypeError("Size must be an integer")
+        if n <= 0:
+            raise ValueError("Size must be positive")
+        
+        return identity(n)
+
+    def __repr__(self) -> str:
+        return f'IdentityLiteral({self.size})'
+
+
+class Symbol(Expr):
+    """A symbolic literal used for special markers like 'T' (Transpose).
+    
+    Evaluates to its string value.
+    """
+    value: str
+
+    def __init__(self, value: str) -> None:
+        self.value = value
+
+    def evaluate(self, env: dict[str, Any]) -> Any:
+        return self.value
+
+    def __repr__(self) -> str:
+        return f"Symbol({self.value})"
+
+
+class SuperscriptOp(Expr):
+    """A superscript operation (A^x).
+
+    Instance Attributes:
+        - base: the expression being operated on
+        - superscript: the exponent expression
+    """
+    base: Expr
+    superscript: Expr
+
+    def __init__(self, base: Expr, superscript: Expr) -> None:
+        """Initialise a new SuperscriptOp node."""
+        self.base = base
+        self.superscript = superscript
+
+    def evaluate(self, env: dict[str, Any]) -> Any:
+        """Evaluate the superscript operation."""
+        base_val = self.base.evaluate(env)
+        sup_val = self.superscript.evaluate(env)
+        
+        if isinstance(base_val, (int, float)):
+            if not isinstance(sup_val, (int, float)):
+                raise TypeError(f"Cannot raise scalar to {type(sup_val).__name__}")
+            
+        elif not isinstance(base_val, Matrix):
+            raise TypeError(f"Cannot apply '^' to {type(base_val).__name__}")
+
+        return base_val ** sup_val
+
+    def __repr__(self) -> str:
+        return f'SuperscriptOp({self.base}, {self.superscript})'
 
 
 # ── Module ────────────────────────────────────────────────────────────────────
