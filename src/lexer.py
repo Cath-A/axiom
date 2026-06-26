@@ -22,6 +22,8 @@ class TokenType(Enum):
     STAR = auto()
     SLASH = auto()
     SEMICOLON = auto()
+    CARET = auto()
+    UNDERSCORE = auto()
     NEWLINE = auto()
     EOF = auto()
 
@@ -70,7 +72,7 @@ def _read_name(source: str, i: int) -> tuple[str, int]:
     """
     value = ''
 
-    while i < len(source) and (source[i].isalpha() or source[i].isdigit() or source[i] == '_'):
+    while i < len(source) and (source[i].isalpha() or source[i].isdigit()):
         value += source[i]
         i += 1
 
@@ -120,9 +122,13 @@ def tokenise(source: str) -> list[Token]:
             token_type = TokenType.SLASH
         elif c == ';':
             token_type = TokenType.SEMICOLON
+        elif c == '^':
+            token_type = TokenType.CARET
+        elif c == '_':
+            token_type = TokenType.UNDERSCORE    
         elif c == '\n':
             token_type = TokenType.NEWLINE
-        elif c.isalpha() or c == '_':
+        elif c.isalpha():
             token_value, i = _read_name(source, i)
             token_type = TokenType.NAME
         elif c == '.':
