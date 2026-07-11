@@ -18,3 +18,6 @@ ROW_SEPARATOR = '\n'
 
 # Optional spacing configuration
 MIN_COLUMN_WIDTH = 1
+
+# Strassen algorithm configuration
+STRASSEN_N_MIN = 64

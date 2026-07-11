@@ -4,15 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="03bdf9f7-dbf3-45d8-9d79-f7a1864e1216" name="Changes" comment="Refactor docstrings">
+    <list default="true" id="03bdf9f7-dbf3-45d8-9d79-f7a1864e1216" name="Changes" comment="Add transpose and __pow__ to Matrix class">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ast_nodes.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ast_nodes.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/builtin_funcs.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/builtin_funcs.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/lexer.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/lexer.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/matrix.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/matrix.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/parser.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/parser.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/test.ml" beforeDir="false" afterPath="$PROJECT_DIR$/test.ml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/constants.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/constants.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/math_helpers.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/math_helpers.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -338,7 +333,39 @@
       <option name="project" value="LOCAL" />
       <updated>1779826720959</updated>
     </task>
-    <option name="localTasksCounter" value="19" />
+    <task id="LOCAL-00019" summary="Add caret and underscore tokens">
+      <option name="closed" value="true" />
+      <created>1782480535596</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1782480535596</updated>
+    </task>
+    <task id="LOCAL-00020" summary="Add powers and identity matrices">
+      <option name="closed" value="true" />
+      <created>1782480569013</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1782480569013</updated>
+    </task>
+    <task id="LOCAL-00021" summary="Add Symbol, IdentityLiteral and SuperscriptOp nodes">
+      <option name="closed" value="true" />
+      <created>1782480616578</created>
+      <option name="number" value="00021" />
+      <option name="presentableId" value="LOCAL-00021" />
+      <option name="project" value="LOCAL" />
+      <updated>1782480616578</updated>
+    </task>
+    <task id="LOCAL-00022" summary="Add transpose and __pow__ to Matrix class">
+      <option name="closed" value="true" />
+      <created>1782480673282</created>
+      <option name="number" value="00022" />
+      <option name="presentableId" value="LOCAL-00022" />
+      <option name="project" value="LOCAL" />
+      <updated>1782480673282</updated>
+    </task>
+    <option name="localTasksCounter" value="23" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -371,6 +398,10 @@
     <MESSAGE value="Math helper for matrix operations such as multiplication" />
     <MESSAGE value="Add formatting for nice printing of matrices" />
     <MESSAGE value="Fix 1x1 matrix returning a number instead (with multiplication)" />
-    <option name="LAST_COMMIT_MESSAGE" value="Fix 1x1 matrix returning a number instead (with multiplication)" />
+    <MESSAGE value="Add caret and underscore tokens" />
+    <MESSAGE value="Add powers and identity matrices" />
+    <MESSAGE value="Add Symbol, IdentityLiteral and SuperscriptOp nodes" />
+    <MESSAGE value="Add transpose and __pow__ to Matrix class" />
+    <option name="LAST_COMMIT_MESSAGE" value="Add transpose and __pow__ to Matrix class" />
   </component>
 </project>
