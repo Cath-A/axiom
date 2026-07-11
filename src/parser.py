@@ -44,7 +44,7 @@ def _parse_statement(tokens: list[Token], i: int) -> tuple[Statement, int]:
         return _parse_assign(tokens, i)
 
     # otherwise parse as expression
-    return _parse_addition(tokens, i)
+    return _parse_or(tokens, i)
 
 
 def _parse_assign(tokens: list[Token], i: int) -> tuple[Assign, int]:
@@ -61,8 +61,8 @@ def _parse_assign(tokens: list[Token], i: int) -> tuple[Assign, int]:
     """
     target = tokens[i].value
 
-    if target == 'I':
-        raise SyntaxError("'I' is reserved for identity matrices and cannot be assigned to")
+    if target in ("I", "and", "or"):
+        raise SyntaxError(f"'{target}' is reserved and cannot be assigned to")
 
     i += 2
     value, i = _parse_addition(tokens, i)
@@ -72,6 +72,69 @@ def _parse_assign(tokens: list[Token], i: int) -> tuple[Assign, int]:
         raise SyntaxError("Chained assignment is not allowed")
 
     return Assign(target, value), i
+
+
+def _parse_or(tokens: list[Token], i: int) -> tuple[Expr, int]:
+    """Parse an and expression starting at index i."""
+    lhs, i = _parse_equality(tokens, i)
+
+    while tokens[i].type == TokenType.NAME and tokens[i].value == 'or':
+        op = 'or'
+        i += 1
+        rhs, i = _parse_equality(tokens, i)
+        lhs = BinOp(lhs, op, rhs)
+
+    return lhs, i
+
+
+def _parse_and(tokens: list[Token], i: int) -> tuple[Expr, int]:
+    """Parse an and expression starting at index i."""
+    lhs, i = _parse_equality(tokens, i)
+
+    while tokens[i].type == TokenType.NAME and tokens[i].value == 'and':
+        op = 'and'
+        i += 1
+        rhs, i = _parse_equality(tokens, i)
+        lhs = BinOp(lhs, op, rhs)
+
+    return lhs, i
+
+
+def _parse_equality(tokens: list[Token], i: int) -> tuple[Expr, int]:
+    """Parse an equality comparison expression starting at index i."""
+    lhs, i = _parse_relational(tokens, i)
+
+    while True:
+        if tokens[i].type == TokenType.NAME and tokens[i].value == 'equals':
+            op = 'equals'
+            i += 1
+        elif tokens[i].type == TokenType.BANG and tokens[i+1].type == TokenType.EQUALS:
+            op = '!='
+            i += 2
+        else:
+            break
+
+        rhs, i = _parse_relational(tokens, i)
+        lhs = BinOp(lhs, op, rhs)
+
+    return lhs, i
+
+
+def _parse_relational(tokens: list[Token], i: int) -> tuple[Expr, int]:
+    """Parse a relational comparison expression starting at index i."""
+    lhs, i = _parse_addition(tokens, i)
+
+    while tokens[i].type in (TokenType.GREATER, TokenType.LESS):
+        op = tokens[i].value
+        i += 1
+        if tokens[i].type == TokenType.EQUALS:
+            op += '='
+            i += 1
+
+        rhs, i = _parse_addition(tokens, i)
+        lhs = BinOp(lhs, op, rhs)
+
+    return lhs, i
 
 
 def _parse_addition(tokens: list[Token], i: int) -> tuple[Expr, int]:
@@ -85,9 +148,7 @@ def _parse_addition(tokens: list[Token], i: int) -> tuple[Expr, int]:
     while tokens[i].type in (TokenType.PLUS, TokenType.MINUS):
         op = tokens[i].value
         i += 1
-
         rhs, i = _parse_multiplication(tokens, i)
-
         lhs = BinOp(lhs, op, rhs)
 
     return lhs, i
@@ -104,9 +165,7 @@ def _parse_multiplication(tokens: list[Token], i: int) -> tuple[Expr, int]:
     while tokens[i].type in (TokenType.STAR, TokenType.SLASH):
         op = tokens[i].value
         i += 1
-
         rhs, i = _parse_atom(tokens, i)
-
         lhs = BinOp(lhs, op, rhs)
 
     return lhs, i
@@ -156,7 +215,7 @@ def _handle_identity(tokens: list[Token], i: int) -> tuple[Expr, int]:
         raise SyntaxError("Expected size after 'I_")
 
     return IdentityLiteral(n), i
-    
+
 
 def _handle_matrix(tokens: list[Token], i: int) -> tuple[Expr, int]:
     """Parse a matrix from source starting at index i.

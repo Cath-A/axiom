@@ -8,11 +8,9 @@
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/ast_nodes.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ast_nodes.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/builtin_funcs.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/builtin_funcs.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/lexer.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/lexer.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/matrix.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/matrix.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/parser.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/parser.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/test.ml" beforeDir="false" afterPath="$PROJECT_DIR$/test.ml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

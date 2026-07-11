@@ -140,7 +140,7 @@ class Matrix:
 
         for j in range(self.num_cols()):
             new_rows.append([self.rows[i][j] for i in range(self.num_rows())])
-        
+
         return Matrix(new_rows)
 
     def __pow__(self, power: int | str) -> Matrix:
@@ -163,7 +163,7 @@ class Matrix:
         if power == 0:
             from builtin_funcs import identity
             return identity(self.num_rows())
-        
+
         result = self
         for _ in range(power - 1):
             result = result * self
@@ -194,6 +194,18 @@ class Matrix:
                 return self.rows[i][j]
 
         return self.rows[key]
+
+    def __eq__(self, other) -> bool:
+        """Return whether self and other are equal matrices."""
+        if not isinstance(other, Matrix):
+            return NotImplemented
+        if self.dimensions() != other.dimensions():
+            return False
+        return all(
+            self.rows[i][j] == other.rows[i][j]
+            for i in range(self.num_rows())
+            for j in range(self.num_cols())
+        )
 
     def __repr__(self) -> str:
         return f'Matrix({self.rows})'

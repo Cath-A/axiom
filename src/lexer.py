@@ -10,6 +10,9 @@ class TokenType(Enum):
     NAME = auto()
     NUMBER = auto()
     EQUALS = auto()
+    BANG = auto()
+    GREATER = auto()
+    LESS = auto()
     LPAREN = auto()
     RPAREN = auto()
     LBRACE = auto()
@@ -95,7 +98,12 @@ def tokenise(source: str) -> list[Token]:
         elif c.isdigit():
             token_value, i = _read_number(source, i)
             token_type = TokenType.NUMBER
-
+        elif c == '>':
+            token_type = TokenType.GREATER
+        elif c == '<':
+            token_type = TokenType.LESS
+        elif c == '!':
+            token_type = TokenType.BANG
         elif c == '=':
             token_type = TokenType.EQUALS
         elif c == '(':
@@ -125,7 +133,7 @@ def tokenise(source: str) -> list[Token]:
         elif c == '^':
             token_type = TokenType.CARET
         elif c == '_':
-            token_type = TokenType.UNDERSCORE    
+            token_type = TokenType.UNDERSCORE
         elif c == '\n':
             token_type = TokenType.NEWLINE
         elif c.isalpha():

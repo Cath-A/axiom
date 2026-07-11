@@ -241,8 +241,6 @@ class UnaryOp(Expr):
             return value
         raise SyntaxError(f"Unknown unary operator '{self.op}'")
 
-        raise SyntaxError(f"Unknown unary operator {self.op}")
-
 
 class BinOp(Expr):
     """An arithmetic binary operation.
@@ -263,7 +261,7 @@ class BinOp(Expr):
         """Initialise a new binary operation expression.
 
         Preconditions:
-            - op in {'+', '-', '*', '/'}
+            - op in {'+', '-', '*', '/', 'equals', ''}
         """
         self.left = left
         self.op = op
@@ -282,6 +280,22 @@ class BinOp(Expr):
             return left * right
         elif self.op == '/':
             return left / right
+        elif self.op == '<':
+            return left < right
+        elif self.op == '>':
+            return left > right
+        elif self.op == '<=':
+            return left <= right
+        elif self.op == '>=':
+            return left >= right
+        elif self.op == 'equals':
+            return left == right
+        elif self.op == '!=':
+            return left != right
+        elif self.op == "and":
+            return left and right
+        elif self.op == "or":
+            return left or right
         else:
             raise TypeError(f"Unsupported operator '{self.op}'")
 
@@ -364,12 +378,12 @@ class IdentityLiteral(Expr):
     def evaluate(self, env: dict[str, Any]) -> Any:
         """Evaluate to produce an identity matrix."""
         n = self.size.evaluate(env)
-        
-        if not isinstance(n, int): 
+
+        if not isinstance(n, int):
             raise TypeError("Size must be an integer")
         if n <= 0:
             raise ValueError("Size must be positive")
-        
+
         return identity(n)
 
     def __repr__(self) -> str:
@@ -378,7 +392,7 @@ class IdentityLiteral(Expr):
 
 class Symbol(Expr):
     """A symbolic literal used for special markers like 'T' (Transpose).
-    
+
     Evaluates to its string value.
     """
     value: str
@@ -412,11 +426,11 @@ class SuperscriptOp(Expr):
         """Evaluate the superscript operation."""
         base_val = self.base.evaluate(env)
         sup_val = self.superscript.evaluate(env)
-        
+
         if isinstance(base_val, (int, float)):
             if not isinstance(sup_val, (int, float)):
                 raise TypeError(f"Cannot raise scalar to {type(sup_val).__name__}")
-            
+
         elif not isinstance(base_val, Matrix):
             raise TypeError(f"Cannot apply '^' to {type(base_val).__name__}")
 

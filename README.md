@@ -42,13 +42,17 @@ Then just type matrix-lang code. Type `exit` or `quit` to leave.
 ---
 
 ## TODOs
-**Immediate**
+**Features**
 - deal with printing large matrices
 - matrix multiplication efficiency
+- add "type(variable)" function
 
+
+**Language Completion**
+- While loops
+- String support, at least for printing labels
+- user made functions
+- (consider adding) 'let' to first time assigning variables, and the implications of that for matrix mutability
 
 **Future**
-- While loops
-- Comparison operators (`==`, `!=`, `<`, `>`)
-- String support, at least for printing labels
-- (consider adding) 'let' to first time assigning variables, and the implications of that for matrix mutability
+- add a linter
