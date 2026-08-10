@@ -1,13 +1,22 @@
+"""Interactive REPL and command-line entry point for the Axiom language.
+
+Provides functions for running Axiom source code, starting the interactive
+REPL, and executing Axiom programs form `.ax` files.
+"""
 import sys
+
 from ast_nodes import Expr
-from lexer import tokenise
-from parser import parse
+from lexer import Lexer
+from parser import Parser
 
 
 def run(source: str, env: dict) -> None:
-    """Run a source string in the given environment."""
-    tokens = tokenise(source)
-    module = parse(tokens)
+    """Run Axiom source code in the given environment.
+    """
+    lexer = Lexer(source)
+    tokens = lexer.tokenise()
+    parser = Parser(tokens)
+    module = parser.parse()
 
     # detect if this is a single expression statement
     if len(module.body) == 1 and isinstance(module.body[0], Expr):
@@ -18,7 +27,8 @@ def run(source: str, env: dict) -> None:
 
 
 def start_repl() -> None:
-    """Start the interactive REPL."""
+    """Start the Axiom interactive REPL.
+    """
     print("Welcome to matrix-lang! \nType 'exit' or 'quit' to leave.")
 
     env = {}
@@ -28,19 +38,16 @@ def start_repl() -> None:
 
         if code in ('quit', 'exit'):
             break
-
         try:
             run(code, env)
-
         except (SyntaxError, NameError) as e:
             print(f"{type(e).__name__}: {e}")
-
         except Exception as e:
             print(f"Error: {e}")
 
 
 def run_file(path: str) -> None:
-    """Run a .ml file."""
+    """Run a .ax file."""
     try:
         with open(path) as f:
             source = f.read()

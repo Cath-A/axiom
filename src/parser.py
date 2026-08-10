@@ -1,338 +1,481 @@
-"""Converts a token list into an AST.
+"""Parser for the Axiom programming language.
+
+Converts a token list into an AST.
 
 Raises ParseError on invalid input.
 """
-from lexer import Token, TokenType
+from lexer import Token
+from constants import KEYWORDS
 from ast_nodes import *
 
 
-def parse(tokens: list[Token]) -> Module:
-    """Parse a list of tokens into a Module AST node.
+class Parser:
+    """Recursive-descent parser for Axiom.
 
-    Returns the root Module representing the full program.
+    The parser owns the current position rather than passing
+    (tokens, index) through every parsing function.
     """
-    body = []
-    i = 0
+    def __init__(self, tokens: list[Token]) -> None:
+        self.tokens = tokens
+        self.index = 0
 
-    while tokens[i].type != TokenType.EOF:
-        while tokens[i].type == TokenType.NEWLINE:
-            i += 1
-            if tokens[i].type == TokenType.EOF:
+    # ------------------------------------------------------------------
+    # Token navigation
+    # ------------------------------------------------------------------
+
+    def current(self) -> Token:
+        """Return the current token.
+
+        Always safe because the lexer guarantees a final EOF token.
+        """
+        return self.tokens[min(self.index, len(self.tokens) - 1)]
+
+    def peek(self, offset: int = 1) -> Token:
+        """Look ahead by offset tokens.
+
+        Bounds-safe by construction: looking beyond EOF returns EOF.
+        """
+        i = self.index + offset
+        i = min(i, len(self.tokens) - 1)
+        return self.tokens[i]
+
+    def check(self, *types: TokenType) -> bool:
+        """Return True if the current token has one of the given types.
+        """
+        return self.current().type in types
+
+    def check_name(self, *names: str) -> bool:
+        """Return True if the current token is a NAME with one of the names.
+        """
+        token = self.current()
+        return token.type == TokenType.NAME and token.value in names
+
+    def advance(self) -> Token:
+        """Consume and return the current token.
+        """
+        token = self.current()
+        if token.type != TokenType.EOF:
+            self.index += 1
+        return token
+
+    def expect(self, token_type: TokenType, message: str) -> Token:
+        """Consume a token of the expected type.
+
+        Raises SyntaxError if the current token is not the expected type.
+        """
+        if not self.check(token_type):
+            token = self.current()
+            raise SyntaxError(f"{message}. (line {token.line})")
+        return self.advance()
+
+    def expect_name(self, name: str, message: str) -> Token:
+        """Consume a NAME token with an exact value."""
+        token = self.current()
+        if token.type != TokenType.NAME or token.value != name:
+            raise SyntaxError(f"{message}. (line {token.line})")
+        return self.advance()
+
+    def skip_newlines(self) -> None:
+        """Consume any number of newline tokens.
+        """
+        while self.check(TokenType.NEWLINE):
+            self.advance()
+
+    # ------------------------------------------------------------------
+    # Entry point
+    # ------------------------------------------------------------------
+
+    def parse(self) -> Module:
+        """Parse the complete token stream into a Module.
+        """
+        body: list[Statement] = []
+        self.skip_newlines()
+
+        while not self.check(TokenType.EOF):
+            statement = self.parse_statement()
+            body.append(statement)
+
+            if self.check(TokenType.NEWLINE):
+                self.skip_newlines()
+            elif not self.check(TokenType.EOF):
+                token = self.current()
+                raise SyntaxError(f"Expected end of statement, got {token.value!r}. (line {token.line})")
+
+        return Module(body)
+
+    # ------------------------------------------------------------------
+    # Statements
+    # ------------------------------------------------------------------
+
+    def parse_statement(self) -> Statement:
+        """Parse one statement.
+        """
+        if self.check_name("if"):
+            return self.parse_if()
+        elif self.check_name("while"):
+            return self.parse_while()
+        elif self.check_name("for"):
+            return self.parse_for_range()
+        elif self.check(TokenType.NAME) and self.peek().type == TokenType.EQUALS:
+            return self.parse_assign()
+        return self.parse_or()
+
+    def parse_assign(self) -> Assign:
+        """Parse: name = expression
+        """
+        target_token = self.current()
+        target = target_token.value
+
+        if target in KEYWORDS:
+            raise SyntaxError(f"{target} is reserved and cannot be assigned to. (line {target_token.line})")
+        self.advance()
+        self.expect(TokenType.EQUALS, "Expected '=' in assignment")
+        value = self.parse_or()
+
+        if not self.check(TokenType.NEWLINE, TokenType.EOF, TokenType.RBRACE):
+            token = self.current()
+            raise SyntaxError(f"Chained assignment is not allowed. (line {token.line})")
+
+        return Assign(target, value)
+
+    # ------------------------------------------------------------------
+    # Control flow
+    # ------------------------------------------------------------------
+
+    def parse_if(self) -> If:
+        """Parse:
+            if condition {
+                statements
+            } else {
+                statements
+            }
+
+        with an optional else block.
+        """
+        self.expect_name("if", "Expected 'if'")
+
+        test = self.parse_or()
+        body = self.parse_block()
+        orelse: list[Statement] = []
+
+        self.skip_newlines()
+
+        if self.check_name("else"):
+            self.advance()
+            orelse = self.parse_block()
+
+        return If(test, body, orelse)
+
+    def parse_while(self) -> While:
+        """Parse:
+            while condition {
+                statements
+            }
+        """
+        self.expect_name("while", "Expected 'while'")
+        test = self.parse_or()
+        body = self.parse_block()
+
+        return While(test, body)
+
+    def parse_for_range(self) -> ForRange:
+        """Parse:
+            for i in range(start, stop) {
+                statements
+            }
+        """
+        self.expect_name("for", "Expected 'for'")
+
+        if not self.check(TokenType.NAME):
+            token = self.current()
+            raise SyntaxError(f"Expected loop variable after 'for'. (line {token.line})")
+
+        target = self.advance().value
+
+        self.expect_name("in", "Expected 'in' after loop variable")
+        self.expect_name("range", "Expected 'range' in for loop")
+
+        self.expect(TokenType.LPAREN, "Expected '(' after 'range'")
+        start = self.parse_or()
+        self.expect(TokenType.COMMA, "Expected ',' between range arguments")
+        stop = self.parse_or()
+        self.expect(TokenType.RPAREN, "Expected ')' after range arguments")
+        body = self.parse_block()
+
+        return ForRange(target, start, stop, body)
+
+    def parse_block(self) -> list[Statement]:
+        """Parse a { ... } block."""
+        self.expect(TokenType.LBRACE, "Expected '{' to start block")
+        self.skip_newlines()
+
+        body: list[Statement] = []
+
+        while not self.check(TokenType.RBRACE, TokenType.EOF):
+            statement = self.parse_statement()
+            body.append(statement)
+
+            if self.check(TokenType.NEWLINE):
+                self.skip_newlines()
+            elif not self.check(TokenType.RBRACE):
+                token = self.current()
+                raise SyntaxError(
+                    f"Expected newline or '}}' after statement. (line {token.line})"
+                )
+
+        self.expect(TokenType.RBRACE, "Expected '}' to close block")
+
+        return body
+
+    # ------------------------------------------------------------------
+    # Expressions
+    # ------------------------------------------------------------------
+
+    def parse_or(self) -> Expr:
+        """Parse logical OR expressions.
+        """
+        lhs = self.parse_and()
+
+        while self.check_name('or'):
+            self.advance()
+            rhs = self.parse_and()
+            lhs = BinOp(lhs, "or", rhs)
+
+        return lhs
+
+    def parse_and(self) -> Expr:
+        """Parse logical AND expressions.
+        """
+        lhs = self.parse_equality()
+
+        while self.check_name('and'):
+            self.advance()
+            rhs = self.parse_and()
+            lhs = BinOp(lhs, "and", rhs)
+
+        return lhs
+
+    def parse_equality(self) -> Expr:
+        """Parse equality comparisons.
+        """
+        lhs = self.parse_relational()
+
+        while True:
+            if self.check_name("equals"):
+                self.advance()
+                op = "equals"
+            elif self.check(TokenType.BANG) and self.peek().type == TokenType.EQUALS:
+                self.advance()
+                self.advance()
+                op = "!="
+            else:
                 break
 
-        statement, i = _parse_statement(tokens, i)
-        body.append(statement)
+            rhs = self.parse_relational()
+            lhs = BinOp(lhs, op, rhs)
 
-        if tokens[i].type == TokenType.NEWLINE:
-            i += 1
-        elif tokens[i].type != TokenType.EOF:
-            raise SyntaxError(f"Unexpected token: {tokens[i].value}")
+        return lhs
 
-    return Module(body)
+    def parse_relational(self) -> Expr:
+        """Parse <, >, <= and >=.
+        """
+        lhs = self.parse_addition()
 
+        while self.check(TokenType.GREATER, TokenType.LESS):
+            op = self.advance().value
 
-def _parse_statement(tokens: list[Token], i: int) -> tuple[Statement, int]:
-    """Parse a single statement starting at index i.
+            if self.check(TokenType.EQUALS):
+                self.advance()
+                op += "="
 
-    Returns the Statement node and the index of the next unread token.
-    """
-    # assignment: NAME = expr
-    if (
-        tokens[i].type == TokenType.NAME
-        and tokens[i + 1].type == TokenType.EQUALS
-    ):
-        return _parse_assign(tokens, i)
+            rhs = self.parse_addition()
+            lhs = BinOp(lhs, op, rhs)
 
-    # otherwise parse as expression
-    return _parse_or(tokens, i)
+        return lhs
 
+    def parse_addition(self) -> Expr:
+        """Prase + and -.
+        """
+        lhs = self.parse_multiplication()
 
-def _parse_assign(tokens: list[Token], i: int) -> tuple[Assign, int]:
-    """Parse an assignment statement starting at index i.
+        while self.check(TokenType.PLUS, TokenType.MINUS):
+            op = self.advance().value
+            rhs = self.parse_multiplication()
+            lhs = BinOp(lhs, op, rhs)
 
-    `i` should point at the NAME token on the left hand side.
-    Representation Invariants:
-        - tokens[i].type == TokenType.NAME
-        - tokens[i + 1].type == TokenType.EQUALS
-        - tokens[i + 2:] begins a valid expression
-        - this function is only called by _parse_statement for assignment cases
+        return lhs
 
-    Returns the Assign node and the index of the next unread token.
-    """
-    target = tokens[i].value
+    def parse_multiplication(self) -> Expr:
+        """Parse * and /.
+        """
+        lhs = self.parse_unary()
 
-    if target in ("I", "and", "or"):
-        raise SyntaxError(f"'{target}' is reserved and cannot be assigned to")
+        while self.check(TokenType.STAR, TokenType.SLASH):
+            op = self.advance().value
+            rhs = self.parse_unary()
+            lhs = BinOp(lhs, op, rhs)
 
-    i += 2
-    value, i = _parse_addition(tokens, i)
+        return lhs
 
-    # forbid chained assignment: must end statement here
-    if tokens[i].type not in (TokenType.NEWLINE, TokenType.EOF):
-        raise SyntaxError("Chained assignment is not allowed")
+    def parse_unary(self) -> Expr:
+        """Parse unary + and -.
+        """
+        if self.check(TokenType.MINUS):
+            self.advance()
+            operand = self.parse_unary()
+            return UnaryOp("-", operand)
 
-    return Assign(target, value), i
+        if self.check(TokenType.PLUS):
+            self.advance()
+            operand = self.parse_unary()
+            return UnaryOp("+", operand)
 
+        return self.parse_power()
 
-def _parse_or(tokens: list[Token], i: int) -> tuple[Expr, int]:
-    """Parse an and expression starting at index i."""
-    lhs, i = _parse_equality(tokens, i)
+    def parse_power(self) -> Expr:
+        """Parse ^ expressions.
 
-    while tokens[i].type == TokenType.NAME and tokens[i].value == 'or':
-        op = 'or'
-        i += 1
-        rhs, i = _parse_equality(tokens, i)
-        lhs = BinOp(lhs, op, rhs)
+        Power is right-associative.
+        """
+        base = self.parse_atom()
 
-    return lhs, i
+        if not self.check(TokenType.CARET):
+            return base
 
+        self.advance()
 
-def _parse_and(tokens: list[Token], i: int) -> tuple[Expr, int]:
-    """Parse an and expression starting at index i."""
-    lhs, i = _parse_equality(tokens, i)
+        if self.check(TokenType.NUMBER):
+            exponent = Scalar(self.advance().value)
 
-    while tokens[i].type == TokenType.NAME and tokens[i].value == 'and':
-        op = 'and'
-        i += 1
-        rhs, i = _parse_equality(tokens, i)
-        lhs = BinOp(lhs, op, rhs)
+        elif self.check(TokenType.NAME):
+            name = self.advance().value
+            if name == "T":
+                exponent = Symbol("T")
+            else:
+                exponent = Name(name)
 
-    return lhs, i
+        elif self.check(TokenType.LBRACE):
+            self.advance()
+            exponent = self.parse_or()
+            self.expect(TokenType.RBRACE, "Expected '}' to close superscript")
 
-
-def _parse_equality(tokens: list[Token], i: int) -> tuple[Expr, int]:
-    """Parse an equality comparison expression starting at index i."""
-    lhs, i = _parse_relational(tokens, i)
-
-    while True:
-        if tokens[i].type == TokenType.NAME and tokens[i].value == 'equals':
-            op = 'equals'
-            i += 1
-        elif tokens[i].type == TokenType.BANG and tokens[i+1].type == TokenType.EQUALS:
-            op = '!='
-            i += 2
         else:
-            break
+            token = self.current()
+            raise SyntaxError(f"Expected superscript after '^'. (line {token.line})")
 
-        rhs, i = _parse_relational(tokens, i)
-        lhs = BinOp(lhs, op, rhs)
+        return SuperscriptOp(base, exponent)
 
-    return lhs, i
+    # ------------------------------------------------------------------
+    # Atoms
+    # ------------------------------------------------------------------
 
+    def parse_atom(self) -> Expr:
+        """Parse a single atomic expression.
+        """
+        token = self.current()
 
-def _parse_relational(tokens: list[Token], i: int) -> tuple[Expr, int]:
-    """Parse a relational comparison expression starting at index i."""
-    lhs, i = _parse_addition(tokens, i)
+        if token.type == TokenType.NUMBER:
+            self.advance()
+            return Scalar(token.value)
+        elif token.type == TokenType.STRING:
+            self.advance()
+            return StringLiteral(token.value)
+        elif token.type == TokenType.NAME:
+            return self.parse_name_atom()
+        elif token.type == TokenType.LPAREN:
+            self.advance()
+            expression = self.parse_or()
+            self.expect(TokenType.RPAREN, "Expected ')' to close expression")
+            return expression
+        elif token.type == TokenType.LBRACKET:
+            return self.parse_matrix()
+        elif token.type == TokenType.NEWLINE:
+            raise SyntaxError(f"Unexpected end of line in expression. (line {token.line})")
+        elif token.type == TokenType.EOF:
+            raise SyntaxError(f"Unexpected end of file in expression. (line {token.line})")
+        raise SyntaxError(f"Unexpected token in expression: {token.value!r}. (line {token.line})")
 
-    while tokens[i].type in (TokenType.GREATER, TokenType.LESS):
-        op = tokens[i].value
-        i += 1
-        if tokens[i].type == TokenType.EQUALS:
-            op += '='
-            i += 1
+    def parse_name_atom(self) -> Expr:
+        """Parse names, function calls and I_n identity literals.
+        """
+        name_token = self.current()
+        name = name_token.value
 
-        rhs, i = _parse_addition(tokens, i)
-        lhs = BinOp(lhs, op, rhs)
+        # I_n / I_3 / I_{...}
+        if name == "I" and self.peek().type == TokenType.UNDERSCORE:
+            self.advance()  # I
+            self.advance()  # _
 
-    return lhs, i
+            if self.check(TokenType.NUMBER):
+                return IdentityLiteral(Scalar(self.advance().value))
+            elif self.check(TokenType.NAME):
+                return IdentityLiteral(Name(self.advance().value))
+            elif self.check(TokenType.LBRACE):
+                self.advance()
+                size = self.parse_or()
+                self.expect(TokenType.RBRACE, "Expected '}' to close identity size")
+                return IdentityLiteral(size)
 
+            token = self.current()
+            raise SyntaxError(f"Expected identity size after 'I_' (line {token.line})")
 
-def _parse_addition(tokens: list[Token], i: int) -> tuple[Expr, int]:
-    """Parse an addition or subtraction expression starting at index i.
+        # Function call
+        if self.peek().type == TokenType.LPAREN:
+            return self.parse_function_call()
 
-    Entry point for all expression parsing - always call this first.
-    Returns the Expr node at the index of the next unread token.
-    """
-    lhs, i = _parse_multiplication(tokens, i)
+        self.advance()
+        return Name(name)
 
-    while tokens[i].type in (TokenType.PLUS, TokenType.MINUS):
-        op = tokens[i].value
-        i += 1
-        rhs, i = _parse_multiplication(tokens, i)
-        lhs = BinOp(lhs, op, rhs)
+    def parse_function_call(self) -> Expr:
+        """Parse a function call.
+        """
+        name = self.expect(TokenType.NAME, "Expected function name").value
+        self.expect(TokenType.LPAREN, "Expected '(' after function name")
+        args: list[Expr] = []
 
-    return lhs, i
+        if self.check(TokenType.RPAREN):
+            self.advance()
+            return FuncCall(name, args)
 
+        while True:
+            args.append(self.parse_or())
+            if not self.check(TokenType.COMMA):
+                break
+            self.advance()
 
-def _parse_multiplication(tokens: list[Token], i: int) -> tuple[Expr, int]:
-    """Parse a multiplication or division expression starting at index i
+        self.expect(TokenType.RPAREN, "Expected ')' to close function call")
+        return FuncCall(name, args)
 
-    Never call directly - called by _parse_addition.
-    Returns the Expr node and the index of the next unread token.
-    """
-    lhs, i = _parse_unary(tokens, i)
+    def parse_matrix(self) -> MatrixLiteral:
+        """Parse a matrix literal.
+        """
+        self.expect(TokenType.LBRACKET, "Expected '[' to start matrix")
 
-    while tokens[i].type in (TokenType.STAR, TokenType.SLASH):
-        op = tokens[i].value
-        i += 1
-        rhs, i = _parse_atom(tokens, i)
-        lhs = BinOp(lhs, op, rhs)
+        if self.check(TokenType.RBRACKET):
+            token = self.current()
+            raise SyntaxError(f"Empty matrix is not allowed. (line {token.line})")
 
-    return lhs, i
+        rows: list[list[Expr]] = []
 
+        while not self.check(TokenType.RBRACKET, TokenType.EOF):
+            row: list[Expr] = []
+            if self.check(TokenType.SEMICOLON, TokenType.RBRACKET):
+                token = self.current()
+                raise SyntaxError(f"Matrix row cannot be empty. (line {token.line})")
 
-def _handle_function(tokens: list[Token], i: int) -> tuple[Expr, int]:
-    """Parse a function call from source starting at index i.
+            while not self.check(TokenType.SEMICOLON, TokenType.RBRACKET, TokenType.EOF):
+                row.append(self.parse_or())
+                if self.check(TokenType.COMMA):
+                    self.advance()
+                    if self.check(TokenType.SEMICOLON, TokenType.RBRACKET):
+                        break
+                else:
+                    break
 
-    Returns the function call as a FuncCall expression and the index of the last USED token.
-    """
-    name = tokens[i].value
-    args = []
-    i += 2
+            rows.append(row)
 
-    # CASE 1: empty argument list
-    if tokens[i].type == TokenType.RPAREN:
-        return FuncCall(name, args), i
+            if self.check(TokenType.SEMICOLON):
+                self.advance()
 
-    # CASE 2: at least 1 argument
-    arg, i = _parse_addition(tokens, i)
-    args.append(arg)
-
-    while tokens[i].type == TokenType.COMMA:
-        i += 1
-        arg, i = _parse_addition(tokens, i)
-        args.append(arg)
-
-    if tokens[i].type != TokenType.RPAREN:
-        raise SyntaxError("Expected ')' to close function call")
-
-    return FuncCall(name, args), i
-
-def _handle_identity(tokens: list[Token], i: int) -> tuple[Expr, int]:
-    i += 2
-
-    if tokens[i].type == TokenType.NUMBER:
-        n = Scalar(tokens[i].value)
-    elif tokens[i].type == TokenType.NAME:
-        n = Name(tokens[i].value)
-    elif tokens[i].type == TokenType.LBRACE:
-        i += 1
-        n, i = _parse_addition(tokens, i)
-
-        if tokens[i].type != TokenType.RBRACE:
-            raise SyntaxError("Expected '}' to close braced expression")
-    else:
-        raise SyntaxError("Expected size after 'I_")
-
-    return IdentityLiteral(n), i
-
-
-def _handle_matrix(tokens: list[Token], i: int) -> tuple[Expr, int]:
-    """Parse a matrix from source starting at index i.
-
-    Returns the matrix as a MatrixLiteral expression and the index of the last USED token.
-    """
-    i += 1
-    if tokens[i].type == TokenType.RBRACKET:
-        raise SyntaxError("Empty Matrix")
-
-    rows = []
-    while tokens[i].type not in (TokenType.EOF, TokenType.NEWLINE, TokenType.RBRACKET):
-        row = []
-
-        while tokens[i].type not in (TokenType.SEMICOLON, TokenType.RBRACKET, TokenType.NEWLINE, TokenType.EOF):
-            expression, i = _parse_addition(tokens, i)
-            row.append(expression)
-            if tokens[i].type == TokenType.COMMA:
-                i += 1
-
-        rows.append(row)
-        if tokens[i].type == TokenType.SEMICOLON:
-            i += 1
-
-    if tokens[i].type != TokenType.RBRACKET:
-        raise SyntaxError("Expected ']' to close matrix definition")
-
-    matrix = MatrixLiteral(rows)
-    return matrix, i
-
-
-def _parse_unary(tokens: list[Token], i: int) -> tuple[Expr, int]:
-    """Parse unary + and - operators."""
-    if tokens[i].type == TokenType.MINUS:
-        i += 1
-        operand, i = _parse_unary(tokens, i)
-        return UnaryOp('-', operand), i
-
-    if tokens[i].type == TokenType.PLUS:
-        i += 1
-        operand, i = _parse_unary(tokens, i)
-        return UnaryOp('+', operand), i
-
-    return _parse_power(tokens, i)
-
-
-def _parse_power(tokens: list[Token], i: int) -> tuple[Expr, int]:
-    """Parse a superscript (^) expression, right-associative.
-
-    Handles:
-        - A^T         → SuperscriptOp(A, None, is_transpose=True)
-        - A^2         → SuperscriptOp(A, Scalar(2))
-        - A^n         → SuperscriptOp(A, Name('n'))
-        - A^{expr}    → SuperscriptOp(A, expr)
-
-    Returns the Expr node and the index of the next unread token.
-    """
-    base, i = _parse_atom(tokens, i)
-
-    if tokens[i].type != TokenType.CARET:
-        return base, i
-
-    i += 1
-
-    if tokens[i].type == TokenType.NUMBER:
-        expr = Scalar(tokens[i].value)
-    elif tokens[i].type == TokenType.NAME and tokens[i].value == 'T':
-        expr = Symbol('T')
-    elif tokens[i].type == TokenType.NAME:
-        expr = Name(tokens[i].value)
-    elif tokens[i].type == TokenType.LBRACE:
-        i += 1
-        expr, i = _parse_addition(tokens, i)
-
-        if tokens[i].type != TokenType.RBRACE:
-            raise SyntaxError("Expected '}' to close braced expression")
-    else:
-        raise SyntaxError("Expected superscript after '^'")
-
-    i += 1
-    return SuperscriptOp(base, expr), i
-
-
-# TODO: rest of the atoms
-def _parse_atom(tokens: list[Token], i: int) -> tuple[Expr, int]:
-    """Parse an atomic expression starting at index i.
-
-     Handles scalars, names, function calls, matrix literals, and
-     parenthesised expressions. Never call directly - called by _parse_multiplication.
-     Returns the Expr node and the index of the next unread token.
-    """
-    if tokens[i].type == TokenType.NUMBER:
-        expression = Scalar(tokens[i].value)
-
-    elif tokens[i].type == TokenType.NAME:
-        if tokens[i].value == 'I' and tokens[i + 1].type == TokenType.UNDERSCORE:
-            expression, i = _handle_identity(tokens, i)
-        elif tokens[i + 1].type == TokenType.LPAREN:
-            expression, i = _handle_function(tokens, i)
-        else:
-            expression = Name(tokens[i].value)
-
-    elif tokens[i].type == TokenType.LPAREN:
-        i += 1
-        expression, i = _parse_addition(tokens, i)
-
-        if tokens[i].type != TokenType.RPAREN:
-            raise SyntaxError("Expected ')'")
-
-    elif tokens[i].type == TokenType.LBRACKET:
-        expression, i = _handle_matrix(tokens, i)
-
-    elif tokens[i].type == TokenType.NEWLINE:
-        raise SyntaxError("Unexpected end of line in expression")
-
-    else:
-        raise SyntaxError(f"Unexpected token in atom: {tokens[i].type}")
-
-    i += 1
-    return expression, i
+        self.expect(TokenType.RBRACKET, "Expected ']' to close matrix")
+        return MatrixLiteral(rows)
