@@ -32,6 +32,21 @@ class Expr(Statement):
         raise NotImplementedError
 
 
+class StringLiteral(Expr):
+    """A string literal such as "hello world".
+    """
+    value: str
+
+    def __init__(self, value: str) -> None:
+        self.value = value
+
+    def evaluate(self, env: dict[str, Any]) -> Any:
+        return self.value
+
+    def __repr__(self) -> str:
+        return f"StringLiteral({self.value!r})"
+
+
 class Assign(Statement):
     """An assignment statement (with a single target).
 
@@ -76,24 +91,41 @@ class Print(Statement):
         print(self.argument.evaluate(env))
 
 
-
 # ── Control flow ──────────────────────────────────────────────────────────────
+
+
+class While(Statement):
+    """A while loop.
+
+    Example:
+        while x < 10 {
+            x = x + 1
+        }
+    """
+    test: Expr
+    body: list[Statement]
+
+    def __init__(self, test: Expr, body: list[Statement]) -> None:
+        self.test = test
+        self.body = body
+
+    def evaluate(self, env: dict[str, Any]) -> None:
+        """Evaluate the body while the condition is truthy.
+        """
+        while self.test.evaluate(env):
+            for statement in self.body:
+                statement.evaluate(env)
 
 
 class If(Statement):
     """An if statement.
 
-    This is a statement of the form:
-        if <test>:
-            <body>
-        else:
-            <orelse>
-
-    Instance Attributes:
-        - test: The condition expression of this if statement.
-        - body: A sequence of statements to evaluate if the condition is True.
-        - orelse: A sequence of statements to evaluate if the condition is False.
-                    (This would be empty in the case that there is no `else` block.)
+    Example:
+        if x > 0 {
+            print(x)
+        } else {
+            print(0)
+        }
     """
     test: Expr
     body: list[Statement]
