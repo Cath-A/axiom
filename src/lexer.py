@@ -1,34 +1,13 @@
-"""Lexer for matrix-lang. Converts raw input into a flat list of tokens."""
+"""Lexer for Axiom.
 
+Converts Axiom source code into a flat list of tokens.
+"""
+import ast
 from typing import Any
-from enum import Enum, auto
 from dataclasses import dataclass
 
-
-class TokenType(Enum):
-    """All possible token types in matrix-lang."""
-    NAME = auto()
-    NUMBER = auto()
-    EQUALS = auto()
-    BANG = auto()
-    GREATER = auto()
-    LESS = auto()
-    LPAREN = auto()
-    RPAREN = auto()
-    LBRACE = auto()
-    RBRACE = auto()
-    LBRACKET = auto()
-    RBRACKET = auto()
-    COMMA = auto()
-    PLUS = auto()
-    MINUS = auto()
-    STAR = auto()
-    SLASH = auto()
-    SEMICOLON = auto()
-    CARET = auto()
-    UNDERSCORE = auto()
-    NEWLINE = auto()
-    EOF = auto()
+from token_types import TokenType
+from constants import TOKEN_MAPPINGS
 
 
 @dataclass
@@ -38,115 +17,176 @@ class Token:
     Instance Attributes:
         - type: the type of the token
         - value: the literal value of the token
+        - line: the source line where the token starts
     """
     type: TokenType
     value: Any
+    line: int
 
 
-def _read_number(source: str, i: int) -> tuple[int | float, int]:
-    """Read a number from source starting at index i.
-
-    Returns the number as an integer or a float and the index of the last character.
+class Lexer:
+    """Convert Axiom source code into tokens.
     """
-    number = ''
-    has_dot = False
-    while i < len(source) and (source[i].isdigit() or source[i] == '.'):
-        if source[i] == '.':
-            if number == '':
-                raise SyntaxError('Numbers must start with a digit, not a decimal point')
-            if has_dot:
-                raise SyntaxError('Invalid number: multiple decimal points')
-            has_dot = True
-        number += source[i]
-        i += 1
+    def __init__(self, source: str) -> None:
+        self.source = source
+        self.index = 0
+        self.line = 1
+        self.tokens: list[Token] = []
 
-    if has_dot:
-        number = float(number)
-    else:
-        number = int(number)
+    def current(self) -> str | None:
+        """Return the current character, or None at EOF.
+        """
+        if self.index >= len(self.source):
+            return None
+        return self.source[self.index]
 
-    return number, i - 1
+    def peek(self, offset: int = 1) -> str | None:
+        """Return a character ahead of the current position.
 
+        Bounds-safe: returns None when past the end of the source.
+        """
+        i = self.index + offset
 
-def _read_name(source: str, i: int) -> tuple[str, int]:
-    """Read a name from source starting at index i.
+        if i >= len(self.source):
+            return None
+        return self.source[i]
 
-    Returns the name as a string and the index of the last character.
-    """
-    value = ''
+    def advance(self) -> str | None:
+        """Consume and return the current character.
+        """
+        char = self.current()
 
-    while i < len(source) and (source[i].isalpha() or source[i].isdigit()):
-        value += source[i]
-        i += 1
+        if self.current() is not None:
+            self.index += 1
+        return char
 
-    return value, i - 1
+    def add_token(self, token_type: TokenType, value: Any, line: int | None = None) -> None:
+        """Append a token.
+        """
+        self.tokens.append(
+            Token(
+                token_type,
+                value,
+                self.line if line is None else line
+            )
+        )
 
+    def read_number(self) -> int | float:
+        """Read an integer or floating-point number.
+        """
+        start_line = self.line
+        number = ""
+        has_dot = False
 
-def tokenise(source: str) -> list[Token]:
-    """Convert a raw source string into a list of tokens."""
-    tokens = []
-    i = 0
+        while True:
+            c = self.current()
 
-    while i < len(source):
-        c = source[i]
-        token_value = c
+            if c is None:
+                break
 
-        if c == ' ':
-            i += 1
-            continue
+            if c.isdigit():
+                number += self.advance()
+            elif c == ".":
+                if has_dot:
+                    raise SyntaxError(f"Invalid number: multiple decimal points. (line {self.line})")
+                has_dot = True
+                number += self.advance()
+            else:
+                break
 
-        elif c.isdigit():
-            token_value, i = _read_number(source, i)
-            token_type = TokenType.NUMBER
-        elif c == '>':
-            token_type = TokenType.GREATER
-        elif c == '<':
-            token_type = TokenType.LESS
-        elif c == '!':
-            token_type = TokenType.BANG
-        elif c == '=':
-            token_type = TokenType.EQUALS
-        elif c == '(':
-            token_type = TokenType.LPAREN
-        elif c == ')':
-            token_type = TokenType.RPAREN
-        elif c == '{':
-            token_type = TokenType.LBRACE
-        elif c == '}':
-            token_type = TokenType.RBRACE
-        elif c == '[':
-            token_type = TokenType.LBRACKET
-        elif c == ']':
-            token_type = TokenType.RBRACKET
-        elif c == ',':
-            token_type = TokenType.COMMA
-        elif c == '+':
-            token_type = TokenType.PLUS
-        elif c == '-':
-            token_type = TokenType.MINUS
-        elif c == '*':
-            token_type = TokenType.STAR
-        elif c == '/':
-            token_type = TokenType.SLASH
-        elif c == ';':
-            token_type = TokenType.SEMICOLON
-        elif c == '^':
-            token_type = TokenType.CARET
-        elif c == '_':
-            token_type = TokenType.UNDERSCORE
-        elif c == '\n':
-            token_type = TokenType.NEWLINE
-        elif c.isalpha():
-            token_value, i = _read_name(source, i)
-            token_type = TokenType.NAME
-        elif c == '.':
-            raise SyntaxError('Numbers must start with a digit, not a decimal point')
-        else:
-            raise SyntaxError(f'Unexpected character: {c}')
+        if number == ".":
+            raise SyntaxError(f"Numbers must start with a digit. (line {start_line})")
 
-        token = Token(token_type, token_value)
-        tokens.append(token)
-        i += 1
+        if has_dot:
+            return float(number)
 
-    tokens.append(Token(TokenType.EOF, None))
-    return tokens
+        return int(number)
+
+    def read_name(self) -> str:
+        """Read an identifier."""
+        value = ""
+
+        while True:
+            c = self.current()
+            if c is None or not c.isalnum():
+                break
+            value += self.advance()
+
+        return value
+
+    def read_string(self) -> str:
+        """Read a double-quoted Axiom string.
+        """
+        start_line = self.line
+        start = self.index
+        self.advance()  # Opening quote
+
+        while True:
+            c = self.current()
+            if c is None or c == '\n':
+                raise SyntaxError(f"Unterminated string. (line {start_line})")
+            elif c == '\\':
+                self.advance()
+                if self.current() is None:
+                    raise SyntaxError(f"Unterminated string. (line {start_line})")
+                self.advance()
+                continue
+            elif c == '"':
+                self.advance()
+                break
+            self.advance()
+
+        raw = self.source[start:self.index]
+
+        try:
+            return ast.literal_eval(raw)
+        except (SyntaxError, ValueError) as exc:
+            raise SyntaxError(f"Invalid string literal. (line {start_line})") from exc
+
+    def skip_comment(self) -> None:
+        """Skip a # comment up to, but not including, the newline.
+        """
+        while self.current() is not None and self.current() != '\n':
+            self.advance()
+
+    def tokenise(self) -> list[Token]:
+        """Tokenise the entire source file.
+        """
+        while self.current() is not None:
+            c = self.current()
+
+            if c == "#":
+                self.skip_comment()
+                continue
+            elif c in " \t\r":
+                self.advance()
+                continue
+            elif c == '\n':
+                self.add_token(TokenType.NEWLINE, '\n')
+                self.advance()
+                self.line += 1
+                continue
+            elif c.isdigit():
+                value = self.read_number()
+                self.add_token(TokenType.NUMBER, value)
+                continue
+            elif c == '"':
+                value = self.read_string()
+                self.add_token(TokenType.STRING, value)
+                continue
+            elif c.isalpha():
+                value = self.read_name()
+                self.add_token(TokenType.NAME, value)
+                continue
+            elif c in TOKEN_MAPPINGS:
+                token_type = TOKEN_MAPPINGS[c]
+                self.add_token(token_type, c)
+                self.advance()
+                continue
+            elif c == ".":
+                raise SyntaxError(f"Numbers must start with a digit, not a decimal point. (line {self.line})")
+
+            raise SyntaxError(f"Unexpected character {c!r}. (line {self.line})")
+
+        self.add_token(TokenType.EOF, None)
+        return self.tokens
