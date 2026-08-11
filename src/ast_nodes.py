@@ -1,4 +1,4 @@
-"""AST node definitions for matrix-lang."""
+"""AST node definitions for Axiom."""
 from mypy.sharedparse import argument_elide_name
 from typeguard import value
 
@@ -8,7 +8,7 @@ from builtin_funcs import BUILTINS, identity
 
 
 class Statement:
-    """An abstract class representing a matrix-lang statement.
+    """An abstract class representing an Axiom statement.
 
     We think of a statement as being a more general piece of code than a
     single expression, and that can have some kind of "effect".
@@ -27,7 +27,7 @@ class Statement:
 
 
 class Expr(Statement):
-    """An abstract class representing a matrix-lang expression.
+    """An abstract class representing a Axiom expression.
     """
     def evaluate(self, env: dict[str, Any]) -> Any:
         """Return the *value* of this expression."""
@@ -556,7 +556,7 @@ class FunctionDef(Statement):
 
 
 class Module:
-    """A class representing a full matrix-lang program.
+    """A class representing a full Axiom program.
 
     Instance Attributes:
         - body: A sequence of statements.
