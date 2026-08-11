@@ -9,6 +9,40 @@ from ast_nodes import Expr
 from lexer import Lexer
 from parser import Parser
 
+def braces_balance(source: str) -> int:
+    """Return the number of unmatched opening braces.
+
+    Braces inside strings and comments are ignored.
+    """
+    balance = 0
+    in_string = False
+    escaped = False
+    in_comment = False
+
+    for char in source:
+        if in_comment:
+            if char == '\n':
+                in_comment = False
+            continue
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == '\\':
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "#":
+            in_comment = True
+        elif char == "{":
+            balance += 1
+        elif char == "}":
+            balance -= 1
+
+    return balance
+
 
 def run(source: str, env: dict) -> None:
     """Run Axiom source code in the given environment.
@@ -30,15 +64,15 @@ def start_repl() -> None:
     """Start the Axiom interactive REPL.
     """
     print("Welcome to matrix-lang! \nType 'exit' or 'quit' to leave.")
-
     env = {}
 
     while True:
-        code = input(">>> ")
-
-        if code in ('quit', 'exit'):
-            break
         try:
+            code = input(">>> ")
+            if code in ("quit", "exit"):
+                break
+            while braces_balance(code) > 0:
+                code += "\n" + input("... ")
             run(code, env)
         except (SyntaxError, NameError) as e:
             print(f"{type(e).__name__}: {e}")
