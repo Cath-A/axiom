@@ -4,6 +4,9 @@ Converts a token list into an AST.
 
 Raises ParseError on invalid input.
 """
+from joblib.testing import param
+from numpy.f2py.crackfortran import parameterpattern
+
 from lexer import Token
 from constants import KEYWORDS
 from ast_nodes import *
@@ -116,8 +119,13 @@ class Parser:
             return self.parse_while()
         elif self.check_name("for"):
             return self.parse_for_range()
+        elif self.check_name("func"):
+            return self.parse_function_def()
+        elif self.check_name("return"):
+            return self.parse_return()
         elif self.check(TokenType.NAME) and self.peek().type == TokenType.EQUALS:
             return self.parse_assign()
+
         return self.parse_or()
 
     def parse_assign(self) -> Assign:
@@ -141,6 +149,65 @@ class Parser:
     # ------------------------------------------------------------------
     # Control flow
     # ------------------------------------------------------------------
+
+    def parse_function_def(self) -> FunctionDef:
+        """Parse:
+            func name(a, b) {
+                statements
+            }
+        """
+        self.expect_name("func", "Expected 'func'")
+
+        if not self.check(TokenType.NAME):
+            token = self.current()
+            raise SyntaxError(f"Expected function name after 'func'. (line {token.line})")
+
+        name = self.advance().value
+        self.expect(TokenType.LPAREN, "Expected '(' after function name")
+
+        parameters: list[str] = []
+
+        if not self.check(TokenType.RPAREN):
+            while True:
+                if not self.check(TokenType.NAME):
+                    token = self.current()
+                    raise SyntaxError(f"Expected parameter name. (line {token.line})")
+
+                parameter = self.advance().value
+
+                if parameter in KEYWORDS:
+                    raise SyntaxError(f"{parameter} is reserved and cannot be a parameter. (line {self.current().line})")
+                if parameter in parameters:
+                    raise SyntaxError(f"Duplicate parameter '{parameter}'. (line {self.current().line})")
+
+                parameters.append(parameter)
+
+                if not self.check(TokenType.COMMA):
+                    break
+
+                self.advance()
+
+            self.expect(TokenType.RPAREN, "Expected ')' after function parameters")
+
+        body = self.parse_block()
+        return FunctionDef(name, parameters, body)
+
+    def parse_return(self) -> Return:
+        """Parse:
+            return expression
+        """
+        token = self.expect_name("return", "Expected 'return'")
+
+        if self.check(TokenType.NEWLINE, TokenType.RBRACE, TokenType.EOF):
+            raise SyntaxError(f"Expected expression after 'return'. (line {token.line})")
+
+        value = self.parse_or()
+
+        if not self.check(TokenType.NEWLINE, TokenType.RBRACE, TokenType.EOF):
+            token = self.current()
+            raise SyntaxError(f"Expected end of statement after return. (line {token.line}")
+
+        return Return(value)
 
     def parse_if(self) -> If:
         """Parse:
