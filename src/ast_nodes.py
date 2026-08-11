@@ -1,5 +1,6 @@
 """AST node definitions for matrix-lang."""
 from mypy.sharedparse import argument_elide_name
+from typeguard import value
 
 from matrix import *
 from typing import Optional, Any
@@ -470,7 +471,7 @@ class FuncCall(Expr):
             function = env[self.name]
             if not isinstance(function, FunctionDef):
                 raise TypeError(f"'{self.name}' is not a function")
-            return function.call(evaluated_args)
+            return function.call(evaluated_args, env)
 
         if self.name in BUILTINS:
             return BUILTINS[self.name](*evaluated_args)
@@ -490,6 +491,7 @@ class ReturnSignal(Exception):
 
 class Return(Statement):
     """A return statement.
+
     Example: return x + 1
     """
     value: Expr
@@ -528,7 +530,7 @@ class FunctionDef(Statement):
         """
         env[self.name] = self
 
-    def call(self, arguments: list[Any]) -> Any:
+    def call(self, arguments: list[Any], env: dict[str, Any]) -> Any:
         """Execute the function with a fresh local environment.
 
         A function without a return expression produces None.
@@ -536,7 +538,8 @@ class FunctionDef(Statement):
         if len(arguments) != len(self.parameters):
             raise TypeError(f"{self.name}() takes {len(self.parameters)} arguments, but {len(arguments)} were given.")
 
-        local_env = dict(zip(self.parameters, arguments))
+        local_env = {name: value for name, value in env.items() if isinstance(value, FunctionDef)}
+        local_env.update(zip(self.parameters), arguments)
 
         try:
             for statement in self.body:
