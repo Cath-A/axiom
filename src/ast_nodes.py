@@ -1,4 +1,5 @@
 """AST node definitions for matrix-lang."""
+from mypy.sharedparse import argument_elide_name
 
 from matrix import *
 from typing import Optional, Any
@@ -187,7 +188,7 @@ class ForRange(Statement):
                 statement.evaluate(env)
 
 
-"""Expressions"""
+# ── Expressions ──────────────────────────────────────────────────────────────
 
 
 class Scalar(Expr):
@@ -362,34 +363,6 @@ class Name(Expr):
         return f'Name({self.id})'
 
 
-class FuncCall(Expr):
-    """A function call expression.
-
-    Instance Attributes:
-        - name: the name of the function
-        - args: the list of arguments
-    """
-    name: str
-    args: list[Expr]
-
-    def __init__(self, name: str, args: list[Expr]) -> None:
-        """Initialise a new FuncCall node."""
-        self.name = name
-        self.args = args
-
-    def evaluate(self, env: dict[str, Any]) -> Any:
-        """Evaluate this function call."""
-        evaluated_args = [arg.evaluate(env) for arg in self.args]
-
-        if self.name not in BUILTINS:
-            raise NameError(f"Unknown function '{self.name}'")
-
-        return BUILTINS[self.name](*evaluated_args)
-
-    def __repr__(self) -> str:
-        return f'FuncCall({self.name}, {self.args})'
-
-
 class IdentityLiteral(Expr):
     """An identity matrix literal written as I_n in source.
 
@@ -471,6 +444,110 @@ class SuperscriptOp(Expr):
     def __repr__(self) -> str:
         return f'SuperscriptOp({self.base}, {self.superscript})'
 
+# ── Function Related ──────────────────────────────────────────────────────────────
+
+
+class FuncCall(Expr):
+    """A function call expression.
+
+    Instance Attributes:
+        - name: the name of the function
+        - args: the list of arguments
+    """
+    name: str
+    args: list[Expr]
+
+    def __init__(self, name: str, args: list[Expr]) -> None:
+        """Initialise a new FuncCall node."""
+        self.name = name
+        self.args = args
+
+    def evaluate(self, env: dict[str, Any]) -> Any:
+        """Evaluate this function call."""
+        evaluated_args = [arg.evaluate(env) for arg in self.args]
+
+        if self.name in env:
+            function = env[self.name]
+            if not isinstance(function, FunctionDef):
+                raise TypeError(f"'{self.name}' is not a function")
+            return function.call(evaluated_args)
+
+        if self.name in BUILTINS:
+            return BUILTINS[self.name](*evaluated_args)
+
+        raise NameError(f"Unknown function '{self.name}'")
+
+    def __repr__(self) -> str:
+        return f'FuncCall({self.name}, {self.args})'
+
+
+class ReturnSignal(Exception):
+    """Internal exception used to unwind execution when a return is reached.
+    """
+    def __init__(self, value: Any) -> None:
+        self.value = value
+
+
+class Return(Statement):
+    """A return statement.
+    Example: return x + 1
+    """
+    value: Expr
+
+    def __init__(self, value: Expr) -> None:
+        self.value = value
+
+    def evaluate(self, env: dict[str, Any]) -> None:
+        """Evaluate the return expression and immediately leave the function.
+        """
+        raise ReturnSignal(self.value.evaluate(env))
+
+    def __repr__(self) -> str:
+        return f"Return({self.value})"
+
+
+class FunctionDef(Statement):
+    """A user-defined function.
+
+    Example:
+            func add(a, b) {
+                return a + b
+            }
+    """
+    name: str
+    parameters: list[str]
+    body: list[Statement]
+
+    def __init__(self, name: str, parameters: list[str], body: list[Statement]) -> None:
+        self.name = name
+        self.parameters = parameters
+        self.body = body
+
+    def evaluate(self, env: dict[str, Any]) -> None:
+        """Register this function in the current environment.
+        """
+        env[self.name] = self
+
+    def call(self, arguments: list[Any]) -> Any:
+        """Execute the function with a fresh local environment.
+
+        A function without a return expression produces None.
+        """
+        if len(arguments) != len(self.parameters):
+            raise TypeError(f"{self.name}() takes {len(self.parameters)} arguments, but {len(arguments)} were given.")
+
+        local_env = dict(zip(self.parameters, arguments))
+
+        try:
+            for statement in self.body:
+                statement.evaluate(local_env)
+        except ReturnSignal as signal:
+            return signal.value
+
+        return None
+
+    def __repr__(self) -> str:
+        return f"FunctionDef({self.name}, {self.parameters}, {self.body})"
 
 # ── Module ────────────────────────────────────────────────────────────────────
 
